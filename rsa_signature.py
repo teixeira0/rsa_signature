@@ -126,8 +126,8 @@ def generate_aes_key():
 	for i in range(128):
 		key.append(str(random.randint(0,1)))
 	print("Generated key:")
-	print('%x' % (int(''.join(key),2)))
-	key = bytearray.fromhex('%x' % (int(''.join(key),2)))
+	print((int(''.join(key),2)).to_bytes(16))
+	key = bytearray((int(''.join(key),2)).to_bytes(16))
 	return key
 
 def rotword(word):
@@ -278,6 +278,64 @@ def aes_decypher(message, key):
 	return state.decode("ascii")
 
 
+def miller_rabin(num):
+	n = num - 1
+	s = 0
+	d = 0
+	while n % 2 == 0:
+		n //= 2
+		s += 1
+	d = n
+	for i in range(100):
+		a = random.randint(2, num-2)
+		x = pow(a,d,num)
+		y = 0
+		for j in range(s):
+			y = pow(x, 2, num)
+			if y == 1 and x != 1 and x != num - 1:
+				return False
+			x = y
+		if y != 1:
+			return False
+	return True
+
+def generate_rsa_key():
+	prime1 = False
+	prime2 = False
+	num1 = 0
+	num2 = 0
+	print("Generating prime 1:")
+	while not prime1:
+		num1 = random.getrandbits(1024)
+		# It is not prime if it is even
+		if num1 % 2 == 0:
+			num1 += 1
+		print("Testing if " + str(num1) + "is prime...")
+		prime1 = miller_rabin(num1)
+	print("Generating prime 2:")
+	while not prime2:
+		num2 = random.getrandbits(1024)
+		# It is not prime if it is even
+		if num2 % 2 == 0:
+			num2 += 1
+		print("Testing if " + str(num2) + "is prime...")
+		prime2 = miller_rabin(num2)
+	print("First prime:")
+	print(num1)
+	print("Second prime:")
+	print(num2)
+	return num1, num2
+
+def rsa_cypher(message):
+	print("Cyphering...")
+	public_key, secret_key = generate_rsa_key()
+	print("Public key:")
+	print(public_key)
+	print("Private key:")
+	print(secret_key)	
+	return message, public_key
+
+
 # python3 rsa_signature.py 1/2/3/4/5 c/d message.txt key.txt result.txt
 
 if (len(sys.argv) != 6):
@@ -305,7 +363,7 @@ if (operation == "1"):
 		# Saving to file
 		with open(result_file, "w") as f:
 			f.write(result)
-	if (suboperation == "d"):
+	elif (suboperation == "d"):
 		with open(key_file) as f:
 			key = f.read()
 		result = aes_decypher(bytearray.fromhex(message), bytearray.fromhex(key)) 
@@ -313,6 +371,15 @@ if (operation == "1"):
 		# Saving to file
 		with open(result_file, "w") as f:
 			f.write(result)
+	else:
+		raise Exception("Invalid sub operation!")
+elif (operation == "2"):
+	if (suboperation == "c"):
+		result, key = rsa_cypher(message) 
+		
+	elif (suboperation == "d"):
+		with open(key_file) as f:
+			key = f.read()
 	else:
 		raise Exception("Invalid sub operation!")
 else:
