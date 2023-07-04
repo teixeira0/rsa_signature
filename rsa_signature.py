@@ -2,8 +2,8 @@
 # Rodrigo Teixeira Soares	19/0019760
 
 import sys
-import binascii
 import random
+import hashlib
 
 sbox = [
     0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -320,20 +320,72 @@ def generate_rsa_key():
 			num2 += 1
 		print("Testing if " + str(num2) + "is prime...")
 		prime2 = miller_rabin(num2)
-	print("First prime:")
-	print(num1)
-	print("Second prime:")
-	print(num2)
 	return num1, num2
+
+def mgf1(seed, length):
+	hlen = hashlib.sha3_256().digest_size
+	print(hlen)
+	if length > (hlen << 32):
+		raise ValueError("mask too long")
+	T = b""
+	counter = 0
+	while len(T) < length:
+		C = int.to_bytes(counter, 4, 'big')
+		T += hashlib.sha3_256(seed + C).digest()
+		counter += 1
+	return T[:length]
+
+def oaep(message, k):
+	# Hash L = ''
+	m = hashlib.sha3_256()
+	m.update(b'')
+	lhash = bytearray.fromhex(m.hexdigest())
+	ps = bytearray(k - len(message) - 2*len(lhash) - 2)
+	db = lhash + ps + bytearray([0x01]) + message
+	seed = bytearray(random.getrandbits(len(lhash)*8).to_bytes(len(lhash)))
+	dbMask = mgf1(seed, len(db))
+	maskedDB = bytearray([a ^ b for a, b in zip(db, dbMask)])
+	seedMask = mgf1(maskedDB, len(lhash))
+	maskedSeed = bytearray([a ^ b for a, b in zip(seed, seedMask)])
+	return bytearray([0x00]) + maskedSeed + maskedDB
+
+def inverse_oaep(message, k):
+	# Hash L = ''
+	m = hashlib.sha3_256()
+	m.update(b'')
+	lhash = bytearray.fromhex(m.hexdigest())
+	maskedSeed = bytearray(message[1:len(lhash)+1])
+	maskedDB = bytearray(message[len(lhash)+1:])
+	seedMask = mgf1(maskedDB, len(lhash))
+	seed = bytearray([a ^ b for a, b in zip(maskedSeed, seedMask)])
+	dbMask = mgf1(seed, k - len(lhash) - 1)
+	db = bytearray([a ^ b for a, b in zip(maskedDB, dbMask)])
+	if lhash == db[0:len(lhash)]:
+		print("LHash match!")
+	else:
+		print("LHash not match!")
+	rest_of_db = db[len(lhash):]
+	PS = rest_of_db[0:rest_of_db.index(0x01)]
+	print("PS:")
+	print(PS)
+	print("Decoded Message:")
+	decoded = rest_of_db[rest_of_db.index(0x01)+1:]
+	print(decoded.decode('ascii'))
+
 
 def rsa_cypher(message):
 	print("Cyphering...")
-	public_key, secret_key = generate_rsa_key()
-	print("Public key:")
-	print(public_key)
-	print("Private key:")
-	print(secret_key)	
-	return message, public_key
+	p, q = generate_rsa_key()
+	print("P:")
+	print(p)
+	print("Q:")
+	print(q)	
+	n = p*q
+	state = oaep(bytearray.fromhex(message.encode().hex()), round(n.bit_length()/8))
+	print("OAEP Encoded message:")
+	print(state)
+	inverse_oaep(state, round(n.bit_length()/8))
+	return message, p
 
 
 # python3 rsa_signature.py 1/2/3/4/5 c/d message.txt key.txt result.txt
