@@ -4,6 +4,7 @@
 import sys
 import random
 import hashlib
+import math
 
 sbox = [
     0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -310,7 +311,6 @@ def generate_rsa_key():
 		# It is not prime if it is even
 		if num1 % 2 == 0:
 			num1 += 1
-		print("Testing if " + str(num1) + "is prime...")
 		prime1 = miller_rabin(num1)
 	print("Generating prime 2:")
 	while not prime2:
@@ -318,13 +318,21 @@ def generate_rsa_key():
 		# It is not prime if it is even
 		if num2 % 2 == 0:
 			num2 += 1
-		print("Testing if " + str(num2) + "is prime...")
-		prime2 = miller_rabin(num2)
-	return num1, num2
+		prime2 = miller_rabin(num2)	
+	n = num1*num2
+	carmichael = math.lcm(num1-1, num2-1)
+	e = 65537
+	d = pow(e, -1, carmichael)
+	public_key = [n, e]
+	secret_key = d
+	print("P:")
+	print(num1)
+	print("Q:")
+	print(num2)	
+	return public_key, secret_key
 
 def mgf1(seed, length):
 	hlen = hashlib.sha3_256().digest_size
-	print(hlen)
 	if length > (hlen << 32):
 		raise ValueError("mask too long")
 	T = b""
@@ -366,38 +374,54 @@ def inverse_oaep(message, k):
 		print("LHash not match!")
 	rest_of_db = db[len(lhash):]
 	PS = rest_of_db[0:rest_of_db.index(0x01)]
-	print("PS:")
-	print(PS)
 	print("Decoded Message:")
 	decoded = rest_of_db[rest_of_db.index(0x01)+1:]
 	print(decoded.decode('ascii'))
+	return decoded.decode('ascii')
 
-
-def rsa_cypher(message):
+def rsa_cypher(message, key=""):
 	print("Cyphering...")
-	p, q = generate_rsa_key()
-	print("P:")
-	print(p)
-	print("Q:")
-	print(q)	
-	n = p*q
+	public_key = []
+	secret_key = 0
+	if not len(key):
+		print("Generating new RSA key...")
+		public_key, secret_key = generate_rsa_key()
+	else:
+		print("Using provided public key for encryption.")
+		public_key = [int(key[0]), int(key[1])]
+	n, e = (public_key[0], public_key[1])
 	state = oaep(bytearray.fromhex(message.encode().hex()), round(n.bit_length()/8))
 	print("OAEP Encoded message:")
-	print(state)
-	inverse_oaep(state, round(n.bit_length()/8))
-	return message, p
+	print(state.hex())
+	c = pow(int.from_bytes(state), e, n)
+	c = c.to_bytes(len(state)).hex()
+	print("RSA Cyphered text:")
+	print(c)
+	return c, public_key, secret_key
+
+def rsa_decypher(message, public_key, secret_key):
+	print("Decyphering...")
+	print("Cyphered message:")
+	print(message)
+	n = int(public_key[0])
+	print("Modulus:")
+	print(n)
+	m = pow(int.from_bytes(bytearray.fromhex(message)), int(secret_key), n)
+	m = m.to_bytes(len(bytearray.fromhex(message)))
+	print("Unpadded message:")
+	print(m)
+	state = inverse_oaep(m, round(n.bit_length()/8))
 
 
-# python3 rsa_signature.py 1/2/3/4/5 c/d message.txt key.txt result.txt
 
-if (len(sys.argv) != 6):
+# python3 rsa_signature.py 1/2/3/4/5 c/d message.txt [key.txt] [secret_key.txt] result.txt
+
+if (len(sys.argv) != 6 and len(sys.argv) !=7):
 	raise Exception("Invalid arguments!")
 
 operation = sys.argv[1]
 suboperation = sys.argv[2]
 message_file = sys.argv[3]
-key_file = sys.argv[4]
-result_file = sys.argv[5]
 message = ""
 key = ""
 result = ""
@@ -406,6 +430,8 @@ with open(message_file) as f:
 	message = f.read()
 
 if (operation == "1"):
+	key_file = sys.argv[4]
+	result_file = sys.argv[5]
 	if (suboperation == "c"):
 		result, key = aes_cypher(message) 
 		# Saving key to file
@@ -426,12 +452,33 @@ if (operation == "1"):
 	else:
 		raise Exception("Invalid sub operation!")
 elif (operation == "2"):
+	key_file = sys.argv[4]
+	secret_key_file = sys.argv[5]
+	result_file = sys.argv[6]
 	if (suboperation == "c"):
-		result, key = rsa_cypher(message) 
-		
-	elif (suboperation == "d"):
 		with open(key_file) as f:
-			key = f.read()
+			key = f.readlines()
+		result, public_key, secret_key = rsa_cypher(message, key)
+
+		with open(key_file, "w") as f:
+			f.write(str(public_key[0]))
+			f.write("\n")
+			f.write(str(public_key[1]))
+
+		if (secret_key != 0):
+			with open(secret_key_file, "w") as f:
+				f.write(str(secret_key))
+
+		# Saving to file
+		with open(result_file, "w") as f:
+			f.write(str(result))
+	elif (suboperation == "d"):
+		secret_key = ""
+		with open(key_file) as f:
+			key = f.readlines()
+		with open(secret_key_file) as f:
+			secret_key = f.read()
+		result = rsa_decypher(message, key, secret_key)
 	else:
 		raise Exception("Invalid sub operation!")
 else:
