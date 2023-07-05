@@ -254,8 +254,8 @@ def aes_cypher(message):
 # This function decyphers a given message in AES
 def aes_decypher(message, key):
 	print("Decyphering...")
-	state = message
-	expanded_key = key_schedule(key)
+	state = bytearray.fromhex(message)
+	expanded_key = key_schedule(bytearray.fromhex(key))
 	for i in range(10,0,-1):
 		state  = add_round_key(expanded_key[i], state)
 		print("Round " + str(i) + " after add round key:")
@@ -348,6 +348,9 @@ def oaep(message, k):
 	m = hashlib.sha3_256()
 	m.update(b'')
 	lhash = bytearray.fromhex(m.hexdigest())
+	print(k)
+	print(len(message))
+	print(len(lhash))
 	ps = bytearray(k - len(message) - 2*len(lhash) - 2)
 	db = lhash + ps + bytearray([0x01]) + message
 	seed = bytearray(random.getrandbits(len(lhash)*8).to_bytes(len(lhash)))
@@ -376,8 +379,8 @@ def inverse_oaep(message, k):
 	PS = rest_of_db[0:rest_of_db.index(0x01)]
 	print("Decoded Message:")
 	decoded = rest_of_db[rest_of_db.index(0x01)+1:]
-	print(decoded.decode('ascii'))
-	return decoded.decode('ascii')
+	print(decoded.hex())
+	return decoded.hex()
 
 def rsa_cypher(message, key=""):
 	print("Cyphering...")
@@ -390,7 +393,7 @@ def rsa_cypher(message, key=""):
 		print("Using provided public key for encryption.")
 		public_key = [int(key[0]), int(key[1])]
 	n, e = (public_key[0], public_key[1])
-	state = oaep(bytearray.fromhex(message.encode().hex()), round(n.bit_length()/8))
+	state = oaep(bytearray.fromhex(message), math.ceil(n.bit_length()/8))
 	print("OAEP Encoded message:")
 	print(state.hex())
 	c = pow(int.from_bytes(state), e, n)
@@ -411,12 +414,13 @@ def rsa_decypher(message, public_key, secret_key):
 	print("Unpadded message:")
 	print(m)
 	state = inverse_oaep(m, round(n.bit_length()/8))
+	return state
 
 
 
-# python3 rsa_signature.py 1/2/3/4/5 c/d message.txt [key.txt] [secret_key.txt] result.txt
+# python3 rsa_signature.py 1/2/3/4/5 c/d message.txt key.txt [secret_key.txt] [key_b.txt] [secret_key_b.txt] [cyphered_key.txt] result.txt
 
-if (len(sys.argv) != 6 and len(sys.argv) !=7):
+if (len(sys.argv) != 6 and len(sys.argv) !=8 and len(sys.argv) !=10):
 	raise Exception("Invalid arguments!")
 
 operation = sys.argv[1]
@@ -444,21 +448,24 @@ if (operation == "1"):
 	elif (suboperation == "d"):
 		with open(key_file) as f:
 			key = f.read()
-		result = aes_decypher(bytearray.fromhex(message), bytearray.fromhex(key)) 
+		result = aes_decypher(message, key) 
 		
 		# Saving to file
 		with open(result_file, "w") as f:
 			f.write(result)
 	else:
 		raise Exception("Invalid sub operation!")
+
 elif (operation == "2"):
 	key_file = sys.argv[4]
 	secret_key_file = sys.argv[5]
-	result_file = sys.argv[6]
+	cyphered_key_file = sys.argv[6]
+	result_file = sys.argv[7]
 	if (suboperation == "c"):
+		result, key = aes_cypher(message) 
 		with open(key_file) as f:
-			key = f.readlines()
-		result, public_key, secret_key = rsa_cypher(message, key)
+			public_key = f.readlines()
+		cyphered_key, public_key, secret_key = rsa_cypher(key, public_key)
 
 		with open(key_file, "w") as f:
 			f.write(str(public_key[0]))
@@ -472,13 +479,94 @@ elif (operation == "2"):
 		# Saving to file
 		with open(result_file, "w") as f:
 			f.write(str(result))
+		with open(cyphered_key_file, "w") as f:
+			f.write(str(cyphered_key))
 	elif (suboperation == "d"):
+		public_key = ""
 		secret_key = ""
+		cyphered_key = ""
 		with open(key_file) as f:
-			key = f.readlines()
+			public_key = f.readlines()
 		with open(secret_key_file) as f:
 			secret_key = f.read()
-		result = rsa_decypher(message, key, secret_key)
+		with open(cyphered_key_file) as f:
+			cyphered_key = f.read()
+		key = rsa_decypher(cyphered_key, public_key, secret_key)
+		result = aes_decypher(message, key)
+
+		# Saving to file
+		with open(result_file, "w") as f:
+			f.write(str(result))
+
+	else:
+		raise Exception("Invalid sub operation!")
+
+elif (operation == "3"):
+	key_file = sys.argv[4]
+	secret_key_file = sys.argv[5]
+	key_file_b = sys.argv[6]
+	secret_key_file_b = sys.argv[7]
+	cyphered_key_file = sys.argv[8]
+	result_file = sys.argv[9]
+	if (suboperation == "c"):
+		result, key = aes_cypher(message) 
+		with open(key_file) as f:
+			public_key_a = f.readlines()
+		cyphered_key_a, public_key_a, secret_key_a = rsa_cypher(key, public_key_a)
+		print("Cyphered key a:")
+		print(cyphered_key_a)
+		with open(key_file_b) as f:
+			public_key_b = f.readlines()
+		cyphered_key_b, public_key_b, secret_key_b = rsa_cypher(cyphered_key_a, public_key_b)
+
+		with open(key_file, "w") as f:
+			f.write(str(public_key_a[0]))
+			f.write("\n")
+			f.write(str(public_key_a[1]))
+
+		if (secret_key != 0):
+			with open(secret_key_file, "w") as f:
+				f.write(str(secret_key_a))
+
+		with open(key_file_b, "w") as f:
+			f.write(str(public_key_b[0]))
+			f.write("\n")
+			f.write(str(public_key_b[1]))
+
+		if (secret_key_b != 0):
+			with open(secret_key_file_b, "w") as f:
+				f.write(str(secret_key_b))
+
+
+		# Saving to file
+		with open(result_file, "w") as f:
+			f.write(str(result))
+		with open(cyphered_key_file, "w") as f:
+			f.write(str(cyphered_key_b))
+	elif (suboperation == "d"):
+		public_key_a = ""
+		secret_key_a = ""
+		public_key_b = ""
+		secret_key_b = ""
+		cyphered_key = ""
+		with open(key_file) as f:
+			public_key_a = f.readlines()
+		with open(secret_key_file) as f:
+			secret_key_a = f.read()
+		with open(key_file_b) as f:
+			public_key_b = f.readlines()
+		with open(secret_key_file_b) as f:
+			secret_key_b = f.read()
+		with open(cyphered_key_file) as f:
+			cyphered_key_b = f.read()
+		cyphered_key_a = rsa_decypher(cyphered_key_b, public_key_b, secret_key_b)
+		key = rsa_decypher(cyphered_key_a, public_key_a, secret_key_a)
+		result = aes_decypher(message, key)
+
+		# Saving to file
+		with open(result_file, "w") as f:
+			f.write(str(result))
+
 	else:
 		raise Exception("Invalid sub operation!")
 else:
