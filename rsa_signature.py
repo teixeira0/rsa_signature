@@ -413,7 +413,7 @@ def rsa_decypher(message, public_key, secret_key):
 	m = m.to_bytes(len(bytearray.fromhex(message)))
 	print("Unpadded message:")
 	print(m)
-	state = inverse_oaep(m, round(n.bit_length()/8))
+	state = inverse_oaep(m, math.ceil(n.bit_length()/8))
 	return state
 
 def rsa_sign(message, secret_key, n):
