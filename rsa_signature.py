@@ -5,6 +5,7 @@ import sys
 import random
 import hashlib
 import math
+import base64
 
 sbox = [
     0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -433,7 +434,7 @@ def rsa_reverse_sign(message, public_key):
 	print(m)
 	return m
 
-# python3 rsa_signature.py 1/2/3/4/5 c/d message.txt key.txt [secret_key.txt] [key_b.txt] [cyphered_key.txt] result.txt
+# python3 rsa_signature.py 1/2/3/4/5 c/d message.txt key.txt [secret_key.txt] [key_b.txt] [cyphered_key.txt] [signed_message.txt] result.txt
 
 if (len(sys.argv) != 6 and len(sys.argv) !=8 and len(sys.argv) !=9):
 	raise Exception("Invalid arguments!")
@@ -570,6 +571,64 @@ elif (operation == "3"):
 		with open(result_file, "w") as f:
 			f.write(str(result))
 
+	else:
+		raise Exception("Invalid sub operation!")
+elif (operation == "4"):
+	# Hash sign
+	key_file = sys.argv[4]
+	secret_key_file = sys.argv[5]
+	signed_message_file = sys.argv[6]
+	result_file = sys.argv[7]
+	if (suboperation == "s"):
+		result, key = aes_cypher(message)
+		m = hashlib.sha3_256()
+		m.update(bytearray.fromhex(result))
+		lhash = m.hexdigest()
+		public_key_a, secret_key_a = generate_rsa_key()
+		signed_message_a = rsa_sign(lhash, secret_key_a, int(public_key_a[0]))
+		signed_message_a = base64.b64encode(signed_message_a.to_bytes(math.ceil(signed_message_a.bit_length()/8))).decode()
+		print("Base 64 encoded signed message:")
+		print(signed_message_a)
+		with open(key_file, "w") as f:
+			f.write(str(public_key_a[0]))
+			f.write("\n")
+			f.write(str(public_key_a[1]))
+
+		with open(secret_key_file, "w") as f:
+			f.write(str(secret_key_a))
+
+		# Saving to file
+		with open(result_file, "w") as f:
+			f.write(str(result))
+		with open(signed_message_file, "w") as f:
+			f.write(str(signed_message_a))
+elif (operation == "5"):
+	# Hash sign
+	key_file = sys.argv[4]
+	secret_key_file = sys.argv[5]
+	signed_message_file = sys.argv[6]
+	result_file = sys.argv[7]
+	if (suboperation == "v"):
+		public_key_a = []
+		secret_key_a = ""
+		signed_message_a = ""
+		with open(key_file) as f:
+			public_key_a = f.readlines()
+		with open(secret_key_file) as f:
+			secret_key_a = f.read()
+		with open(signed_message_file) as f:
+			signed_message_a = f.read()
+		signed_message_a = base64.b64decode(signed_message_a.encode())
+		signed_message_a = int.from_bytes(signed_message_a)
+		lhash = rsa_reverse_sign(signed_message_a, public_key_a)
+		lhash = lhash.to_bytes(32).hex()
+		m = hashlib.sha3_256()
+		m.update(bytearray.fromhex(message))
+		generated_lhash = m.hexdigest()
+		if (generated_lhash == lhash):
+			print("Signature matches!")
+		else:
+			print("Signature does not match!")
 	else:
 		raise Exception("Invalid sub operation!")
 else:
