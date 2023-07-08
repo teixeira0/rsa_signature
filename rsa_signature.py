@@ -382,16 +382,12 @@ def inverse_oaep(message, k):
 	print(decoded.hex())
 	return decoded.hex()
 
-def rsa_cypher(message, key=""):
+def rsa_cypher(message):
 	print("Cyphering...")
 	public_key = []
 	secret_key = 0
-	if not len(key):
-		print("Generating new RSA key...")
-		public_key, secret_key = generate_rsa_key()
-	else:
-		print("Using provided public key for encryption.")
-		public_key = [int(key[0]), int(key[1])]
+	print("Generating new RSA key...")
+	public_key, secret_key = generate_rsa_key()
 	n, e = (public_key[0], public_key[1])
 	state = oaep(bytearray.fromhex(message), math.ceil(n.bit_length()/8))
 	print("OAEP Encoded message:")
@@ -417,15 +413,25 @@ def rsa_decypher(message, public_key, secret_key):
 	return state
 
 def rsa_sign(message, secret_key, n):
+	print("Unsigned message:")
+	print(int.from_bytes(bytearray.fromhex(message)))
 	m = pow(int.from_bytes(bytearray.fromhex(message)), int(secret_key), n)
-	m = m.to_bytes(len(bytearray.fromhex(message)))
-	return m.hex()
+	print("Signed message:")
+	print(m)
+	return m
 
 def rsa_reverse_sign(message, public_key):
 	n, e = (int(public_key[0]), int(public_key[1]))
-	m = pow(int.from_bytes(bytearray.fromhex(message)), e, n)
-	m = m.to_bytes(len(bytearray.fromhex(message)))
-	return m.hex()
+	print("n")
+	print(n)
+	print("e")
+	print(e)
+	print("Signed message:")
+	print(message)
+	m = pow(int(message), e, n)
+	print("Unsigned message:")
+	print(m)
+	return m
 
 # python3 rsa_signature.py 1/2/3/4/5 c/d message.txt key.txt [secret_key.txt] [key_b.txt] [cyphered_key.txt] result.txt
 
@@ -471,19 +477,16 @@ elif (operation == "2"):
 	cyphered_key_file = sys.argv[6]
 	result_file = sys.argv[7]
 	if (suboperation == "c"):
-		result, key = aes_cypher(message) 
-		with open(key_file) as f:
-			public_key = f.readlines()
-		cyphered_key, public_key, secret_key = rsa_cypher(key, public_key)
+		result, key = aes_cypher(message)
+		cyphered_key, public_key, secret_key = rsa_cypher(key)
 
 		with open(key_file, "w") as f:
 			f.write(str(public_key[0]))
 			f.write("\n")
 			f.write(str(public_key[1]))
 
-		if (secret_key != 0):
-			with open(secret_key_file, "w") as f:
-				f.write(str(secret_key))
+		with open(secret_key_file, "w") as f:
+			f.write(str(secret_key))
 
 		# Saving to file
 		with open(result_file, "w") as f:
@@ -517,10 +520,8 @@ elif (operation == "3"):
 	cyphered_key_file = sys.argv[7]
 	result_file = sys.argv[8]
 	if (suboperation == "c"):
-		result, key = aes_cypher(message) 
-		with open(key_file) as f:
-			public_key_a = f.readlines()
-		cyphered_key_a, public_key_a, secret_key_a = rsa_cypher(key, public_key_a)
+		result, key = aes_cypher(message)
+		cyphered_key_a, public_key_a, secret_key_a = rsa_cypher(key)
 		print("RSA Cyphered message:")
 		print(cyphered_key_a)
 		public_key_b, secret_key_b = generate_rsa_key()
@@ -530,9 +531,8 @@ elif (operation == "3"):
 			f.write("\n")
 			f.write(str(public_key_a[1]))
 
-		if (secret_key_a != 0):
-			with open(secret_key_file, "w") as f:
-				f.write(str(secret_key_a))
+		with open(secret_key_file, "w") as f:
+			f.write(str(secret_key_a))
 
 		with open(key_file_b, "w") as f:
 			f.write(str(public_key_b[0]))
@@ -549,7 +549,7 @@ elif (operation == "3"):
 		secret_key_a = ""
 		public_key_b = ""
 		secret_key_b = ""
-		cyphered_key = ""
+		cyphered_key_b = ""
 		with open(key_file) as f:
 			public_key_a = f.readlines()
 		with open(secret_key_file) as f:
@@ -560,6 +560,7 @@ elif (operation == "3"):
 			cyphered_key_b = f.read()
 		cyphered_key_a = rsa_reverse_sign(cyphered_key_b, public_key_b)
 		print("RSA Cyphered message:")
+		cyphered_key_a = cyphered_key_a.to_bytes(math.ceil(cyphered_key_a.bit_length()/8)).hex()
 		print(cyphered_key_a)
 		key = rsa_decypher(cyphered_key_a, public_key_a, secret_key_a)
 		print(message)
