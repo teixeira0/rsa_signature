@@ -1,4 +1,4 @@
-# Cifra AES
+# Cifra AES e RSA
 # Rodrigo Teixeira Soares	19/0019760
 
 import sys
@@ -7,6 +7,7 @@ import hashlib
 import math
 import base64
 
+# This search table is used in the sbox step in the AES cypher
 sbox = [
     0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
     0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -26,6 +27,7 @@ sbox = [
     0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16
     ]
 
+# This search table is used in the sbox step in the AES decypher
 inverse_sbox = [
 	0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
     0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
@@ -45,6 +47,7 @@ inverse_sbox = [
     0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D
 ]
 
+# This search table is a convenience table to multiply a byte by 9
 times_9 = [
 	0x00,0x09,0x12,0x1b,0x24,0x2d,0x36,0x3f,0x48,0x41,0x5a,0x53,0x6c,0x65,0x7e,0x77,
 	0x90,0x99,0x82,0x8b,0xb4,0xbd,0xa6,0xaf,0xd8,0xd1,0xca,0xc3,0xfc,0xf5,0xee,0xe7,
@@ -64,6 +67,7 @@ times_9 = [
 	0x31,0x38,0x23,0x2a,0x15,0x1c,0x07,0x0e,0x79,0x70,0x6b,0x62,0x5d,0x54,0x4f,0x46
 ]
 
+# This search table is a convenience table to multiply a byte by 11
 times_11 = [
 	0x00,0x0b,0x16,0x1d,0x2c,0x27,0x3a,0x31,0x58,0x53,0x4e,0x45,0x74,0x7f,0x62,0x69,
 	0xb0,0xbb,0xa6,0xad,0x9c,0x97,0x8a,0x81,0xe8,0xe3,0xfe,0xf5,0xc4,0xcf,0xd2,0xd9,
@@ -83,6 +87,7 @@ times_11 = [
 	0xca,0xc1,0xdc,0xd7,0xe6,0xed,0xf0,0xfb,0x92,0x99,0x84,0x8f,0xbe,0xb5,0xa8,0xa3
 ]
 
+# This search table is a convenience table to multiply a byte by 13
 times_13 = [
 	0x00,0x0d,0x1a,0x17,0x34,0x39,0x2e,0x23,0x68,0x65,0x72,0x7f,0x5c,0x51,0x46,0x4b,
 	0xd0,0xdd,0xca,0xc7,0xe4,0xe9,0xfe,0xf3,0xb8,0xb5,0xa2,0xaf,0x8c,0x81,0x96,0x9b,
@@ -102,6 +107,7 @@ times_13 = [
 	0xdc,0xd1,0xc6,0xcb,0xe8,0xe5,0xf2,0xff,0xb4,0xb9,0xae,0xa3,0x80,0x8d,0x9a,0x97
 ]
 
+# This search table is a convenience table to multiply a byte by 14
 times_14 = [
 	0x00,0x0e,0x1c,0x12,0x38,0x36,0x24,0x2a,0x70,0x7e,0x6c,0x62,0x48,0x46,0x54,0x5a,
 	0xe0,0xee,0xfc,0xf2,0xd8,0xd6,0xc4,0xca,0x90,0x9e,0x8c,0x82,0xa8,0xa6,0xb4,0xba,
@@ -121,8 +127,10 @@ times_14 = [
 	0xd7,0xd9,0xcb,0xc5,0xef,0xe1,0xf3,0xfd,0xa7,0xa9,0xbb,0xb5,0x9f,0x91,0x83,0x8d
 ]
 
+# This list is used in the key schedule in the AES cypher
 rcon = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]
 
+# This function generates a random 128-bit AES key
 def generate_aes_key():
 	key = []
 	for i in range(128):
@@ -132,14 +140,17 @@ def generate_aes_key():
 	key = bytearray((int(''.join(key),2)).to_bytes(16))
 	return key
 
+# This function rotates a word by 1 byte to the left
 def rotword(word):
 	result = bytearray([word[1], word[2], word[3], word[0]])
 	return result
 
+# This function calculates the s-box in a 4-byte word
 def subword(word):
 	result = bytearray([sbox[word[0]], sbox[word[1]], sbox[word[2]], sbox[word[3]]])
 	return result
 
+# This function expands the AES key for the 10 steps of add_round_key
 def key_schedule(key):
 	key_words = [key[0:4], key[4:8], key[8:12], key[12:16]]
 	for i in range(44)[4:]:
@@ -155,18 +166,22 @@ def key_schedule(key):
 
 	return expanded_key
 
+# This function does the add round key in a specific AES step
 def add_round_key(key, state):
 	state = bytearray([a ^ b for a, b in zip(key, state)])
 	return state
 
+# This function does the s_box in a specific AES step
 def s_box(state):
 	state = bytearray([sbox[a] for a in state])
 	return state
 
+# This function reverses the s_box in a AES decypher step
 def inverse_s_box(state):
 	state = bytearray([inverse_sbox[a] for a in state])
 	return state
 
+# This function does the shift rows in a specific AES step
 def shift_rows(state):
 	rows = [bytearray([state[0], state[4], state[8], state[12]]), [state[1], state[5], state[9], state[13]], [state[2], state[6], state[10], state[14]], [state[3], state[7], state[11], state[15]]]
 	# Row 1
@@ -178,6 +193,7 @@ def shift_rows(state):
 	state = bytearray([rows[0][0], rows[1][0], rows[2][0], rows[3][0], rows[0][1], rows[1][1], rows[2][1], rows[3][1], rows[0][2], rows[1][2], rows[2][2], rows[3][2], rows[0][3], rows[1][3], rows[2][3], rows[3][3]])
 	return state
 
+# This function reverts the shift_rows in a AES decypher step
 def inverse_shift_rows(state):
 	rows = [bytearray([state[0], state[4], state[8], state[12]]), [state[1], state[5], state[9], state[13]], [state[2], state[6], state[10], state[14]], [state[3], state[7], state[11], state[15]]]
 	# Row 1
@@ -189,6 +205,7 @@ def inverse_shift_rows(state):
 	state = bytearray([rows[0][0], rows[1][0], rows[2][0], rows[3][0], rows[0][1], rows[1][1], rows[2][1], rows[3][1], rows[0][2], rows[1][2], rows[2][2], rows[3][2], rows[0][3], rows[1][3], rows[2][3], rows[3][3]])
 	return state
 
+# This function does the mix columns in a specific AES step
 def mix_columns(state):
 	columns = [state[0:4], state[4:8], state[8:12], state[12:16]]
 	new_columns = []
@@ -207,6 +224,7 @@ def mix_columns(state):
 	state = bytearray(b''.join(new_columns))
 	return state
 
+# This function reverts a mix columns in a AES decypher step
 def inverse_mix_columns(state):
 	columns = [state[0:4], state[4:8], state[8:12], state[12:16]]
 	new_columns = []
@@ -279,7 +297,7 @@ def aes_decypher(message, key):
 	print("Decyphering complete!")
 	return state.decode("ascii")
 
-
+# This function uses the miller_rabin primality test to determine if a number is a probable prime number
 def miller_rabin(num):
 	n = num - 1
 	s = 0
@@ -301,6 +319,7 @@ def miller_rabin(num):
 			return False
 	return True
 
+# This function generates the public and private RSA keys with 2 random prime numbers
 def generate_rsa_key():
 	prime1 = False
 	prime2 = False
@@ -332,6 +351,7 @@ def generate_rsa_key():
 	print(num2)	
 	return public_key, secret_key
 
+# This function generates a byte mask with a seed and a length
 def mgf1(seed, length):
 	hlen = hashlib.sha3_256().digest_size
 	if length > (hlen << 32):
@@ -344,6 +364,7 @@ def mgf1(seed, length):
 		counter += 1
 	return T[:length]
 
+# This function performs the OAEP padding with a given message and modulus length 
 def oaep(message, k):
 	# Hash L = ''
 	m = hashlib.sha3_256()
@@ -361,6 +382,7 @@ def oaep(message, k):
 	maskedSeed = bytearray([a ^ b for a, b in zip(seed, seedMask)])
 	return bytearray([0x00]) + maskedSeed + maskedDB
 
+# This function reverts the OAEP padding with a given message and modulos length
 def inverse_oaep(message, k):
 	# Hash L = ''
 	m = hashlib.sha3_256()
@@ -383,6 +405,7 @@ def inverse_oaep(message, k):
 	print(decoded.hex())
 	return decoded.hex()
 
+# This function cyphers a given message using the RSA algorithm
 def rsa_cypher(message):
 	print("Cyphering...")
 	public_key = []
@@ -399,6 +422,7 @@ def rsa_cypher(message):
 	print(c)
 	return c, public_key, secret_key
 
+# This function decyphers a given message using the RSA algorithm
 def rsa_decypher(message, public_key, secret_key):
 	print("Decyphering...")
 	print("Cyphered message:")
@@ -413,6 +437,7 @@ def rsa_decypher(message, public_key, secret_key):
 	state = inverse_oaep(m, math.ceil(n.bit_length()/8))
 	return state
 
+# This function signs a given message with a RSA private key
 def rsa_sign(message, secret_key, n):
 	print("Unsigned message:")
 	print(int.from_bytes(bytearray.fromhex(message)))
@@ -421,6 +446,7 @@ def rsa_sign(message, secret_key, n):
 	print(m)
 	return m
 
+# This function reverts a signature with a RSA public key
 def rsa_reverse_sign(message, public_key):
 	n, e = (int(public_key[0]), int(public_key[1]))
 	print("n")
@@ -434,6 +460,7 @@ def rsa_reverse_sign(message, public_key):
 	print(m)
 	return m
 
+# Usage:
 # python3 rsa_signature.py 1/2/3/4/5 c/d message.txt key.txt [secret_key.txt] [key_b.txt] [cyphered_key.txt] [signed_message.txt] result.txt
 
 if (len(sys.argv) != 6 and len(sys.argv) !=8 and len(sys.argv) !=9):
@@ -448,7 +475,8 @@ result = ""
 
 with open(message_file) as f:
 	message = f.read()
-
+# Checking desired operation (use case)
+# AES Cypher
 if (operation == "1"):
 	key_file = sys.argv[4]
 	result_file = sys.argv[5]
@@ -472,6 +500,7 @@ if (operation == "1"):
 	else:
 		raise Exception("Invalid sub operation!")
 
+# AES and RSA Cypher
 elif (operation == "2"):
 	key_file = sys.argv[4]
 	secret_key_file = sys.argv[5]
@@ -514,6 +543,7 @@ elif (operation == "2"):
 	else:
 		raise Exception("Invalid sub operation!")
 
+# Mutual authentication cypher
 elif (operation == "3"):
 	key_file = sys.argv[4]
 	secret_key_file = sys.argv[5]
@@ -573,6 +603,8 @@ elif (operation == "3"):
 
 	else:
 		raise Exception("Invalid sub operation!")
+
+# RSA Signature
 elif (operation == "4"):
 	# Hash sign
 	key_file = sys.argv[4]
@@ -602,6 +634,8 @@ elif (operation == "4"):
 			f.write(str(result))
 		with open(signed_message_file, "w") as f:
 			f.write(str(signed_message_a))
+
+# Verify RSA signature
 elif (operation == "5"):
 	# Hash sign
 	key_file = sys.argv[4]
